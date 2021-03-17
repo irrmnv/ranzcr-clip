@@ -1,0 +1,6 @@
+matplotlib
+pandas
+pytorch-argus
+albumentations
+scikit-learn
+git+https://github.com/rwightman/pytorch-image-models@master

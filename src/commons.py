@@ -36,6 +36,8 @@ class config:
     lr = lr_calc(train_batch_size)
     min_lr = 1e-6
     experiment_name = f'{experiment_prefix}{model_name}_{image_size}'
+    device = 'cuda'
+    devices = (0, 1, 2, 3)
 
 
 def get_best_model_path(folder_path):

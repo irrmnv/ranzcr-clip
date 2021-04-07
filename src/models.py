@@ -30,21 +30,24 @@ class BCEMSELoss(nn.Module):
 
     
 class StudentModel(nn.Module):
-    def __init__(self, teacher_model, **params):
+    def __init__(self, teacher_model_path, **params):
         super().__init__()
+        teacher_model = argus.load_model(teacher_model_path, device='cpu')
+        teacher_model = teacher_model.get_nn_module()
+        teacher_model.eval()
+
+        for param in teacher_model.parameters():
+            param.requires_grad = False
+
         num_classes = params['num_classes']
         student_model = timm.create_model(**params)
-        if params['model_name'] in ['rexnet_150']:
-            n_features = student_model.head.fc.in_features
-            student_model.head.global_pool = nn.Identity()
-            student_model.head.fc = nn.Identity()
-        elif params['model_name'] in ['resnet200d', 'resnet50d']:
+        student_model.global_pool = nn.Identity()
+
+        if params['model_name'] in ['resnet200d', 'resnet50d']:
             n_features = student_model.fc.in_features
-            student_model.global_pool = nn.Identity()
             student_model.fc = nn.Identity()
         else:
             n_features = student_model.classifier.in_features
-            student_model.global_pool = nn.Identity()
             student_model.classifier = nn.Identity()
 
         self.student_model = student_model
@@ -72,7 +75,20 @@ class RANZCRStageZero(argus.Model):
     loss = nn.BCEWithLogitsLoss
     prediction_transform = nn.Sigmoid
 
-    
+    def load_from_stage_one(self, model_path):
+        model = torch.load(model_path, map_location='cpu')
+        old_state_dict = model['nn_state_dict']
+        state_dict = {k.replace('student_model.', ''): v for k, v in old_state_dict.items() if 'student_model' in k}
+        if model['params']['model_name'] in ['resnet200d', 'resnet50d']:
+            state_dict['fc.weight'] = old_state_dict['fc.weight']
+            state_dict['fc.bias'] = old_state_dict['fc.bias']
+        else:
+            state_dict['classifier.weight'] = old_state_dict['fc.weight']
+            state_dict['classifier.bias'] = old_state_dict['fc.bias']
+
+        self.nn_module.load_state_dict(state_dict)
+
+
 class RANZCRStageOne(argus.Model):
     nn_module = StudentModel
     optimizer = optim.AdamW
